@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Elastic Collision Simulator</title>
+    <style>
+        body {
+            background: #111;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: center;
+        }
+
+        input,
+        button {
+            margin: 10px;
+            padding: 8px;
+            border-radius: 5px;
+        }
+
+        label {
+            display: inline-block;
+            min-width: 200px;
+            text-align: left;
+        }
+
+        #container {
+            position: relative;
+            width: 90%;
+            max-width: 900px;
+            height: 300px;
+            margin: 50px auto;
+            background: #222;
+            border: 2px solid #444;
+            overflow: hidden;
+        }
+
+        .object {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            position: absolute;
+            top: 120px;
+        }
+
+        #obj1 {
+            background: #ff4d4d;
+        }
+
+        #obj2 {
+            background: #4db8ff;
+        }
+
+        #data {
+            background: #1e1e2f;
+            color: #f0f0f0;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            margin: 20px auto;
+            transition: all 0.3s ease;
+        }
+
+        #data h2 {
+            margin-top: 0;
+            font-size: 1.4rem;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 8px;
+            color: #73fbd3;
+        }
+
+        .flex-data {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .data-section {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .data-section p {
+            margin: 6px 0;
+            font-size: 0.95rem;
+        }
+
+        .data-section strong {
+            color: #ffffff;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Elastic Collision Simulator (KM Scale)</h1>
+
+    <div>
+        <label>Mass 1 (kg): <input type="number" id="mass1" value="5"></label>
+        <label>Velocity 1 (km/h): <input type="number" id="vel1" value="50"></label><br>
+        <label>Mass 2 (kg): <input type="number" id="mass2" value="2"></label>
+        <label>Velocity 2 (km/h): <input type="number" id="vel2" value="-30"></label><br>
+        <label>Distance Between (km): <input type="number" id="distanceKm" value="10"></label><br>
+        <button onclick="startSimulation()">Start Simulation</button>
+        <button onclick="resetSimulation()">Reset</button>
+        <div id="data">
+            <h2>Simulation Data</h2>
+            <div class="flex-data">
+                <div class="data-section">
+                    <p><strong>Real Distance Between:</strong><span id="realDist">10</span> km</p>
+                    <p><strong>Hour:</strong><span id="hour">0.00</span></p>
+                </div>
+                <div class="data-section">
+                    <p><strong>Object 1 Velocity:</strong> <span id="v1Data">50</span> km/h</p>
+                    <p><strong>Object 2 Velocity:</strong><span id="v2Data">-30</span> km/h</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="container">
+        <div class="object" id="obj1"></div>
+        <div class="object" id="obj2"></div>
+    </div>
+
+    <script>
+        const container = document.getElementById('container');
+        const obj1 = document.getElementById('obj1');
+        const obj2 = document.getElementById('obj2');
+        const addData = document.getElementById('data');
+
+        let coverDistance = 0;
+        let avgSpeed = 0;
+        let Time = 0;
+        const objWidth = 50;
+        let containerWidth;
+        let animationId;
+
+        let m1, m2, v1_km, v2_km, x1, x2;
+        let pixelsPerKm, distanceKm;
+        let realX1, realX2;
+
+        function startSimulation() {
+            cancelAnimationFrame(animationId);
+
+            containerWidth = container.clientWidth;
+
+            m1 = parseFloat(document.getElementById('mass1').value);
+            m2 = parseFloat(document.getElementById('mass2').value);
+            v1_km = parseFloat(document.getElementById('vel1').value);
+            v2_km = parseFloat(document.getElementById('vel2').value);
+            distanceKm = parseFloat(document.getElementById('distanceKm').value);
+
+            if (isNaN(distanceKm && m2 && m1 && v1_km && v2_km) || distanceKm <= 0 || m1 <= 0 || m2 <= 0) {
+                alert("Enter a valid data !");
+                return;
+            }
+
+            // Pixels per km scaling (virtual km in container width)
+            pixelsPerKm = (containerWidth - 100) / distanceKm;
+
+            // Initial real positions (in km)
+            realX1 = 0;
+            realX2 = distanceKm;
+
+            // Convert real position to pixels
+            x1 = realX1 * pixelsPerKm;
+            x2 = realX2 * pixelsPerKm;
+
+            // Convert km/h velocity to px/frame (~60fps)
+            v1 = (v1_km * 1000 / 3600) * pixelsPerKm / 60;
+            v2 = (v2_km * 1000 / 3600) * pixelsPerKm / 60;
+
+            obj1.style.left = `${x1}px`;
+            obj2.style.left = `${x2}px`;
+
+            animate();
+        }
+
+        function animate() {
+            realX1 += v1 / pixelsPerKm;
+            realX2 += v2 / pixelsPerKm;
+            coverDistance += (Math.abs(v1) / pixelsPerKm) + (Math.abs(v2) / pixelsPerKm);
+            let v1_kmh = v1 * 36 * 6 / pixelsPerKm;
+            let v2_kmh = v2 * 36 * 6 / pixelsPerKm;
+            avgSpeed = (Math.abs(v1_kmh) + Math.abs(v2_kmh));
+            Time = coverDistance / avgSpeed;
+
+            x1 = realX1 * pixelsPerKm;
+            x2 = realX2 * pixelsPerKm;
+
+            obj1.style.left = `${x1}px`;
+            obj2.style.left = `${x2}px`;
+
+            // Collision detection
+            if (Math.abs(x1 - x2) < objWidth) {
+                console.log(Time.toFixed(2));
+                const newV1 = ((m1 - m2) * v1 + 2 * m2 * v2) / (m1 + m2);
+                const newV2 = ((m2 - m1) * v2 + 2 * m1 * v1) / (m1 + m2);
+
+                v1 = newV1;
+                v2 = newV2;
+
+                // Adjust real positions slightly
+                if (x1 < x2) {
+                    realX1 -= 0.02;
+                    realX2 += 0.02;
+                } else {
+                    realX1 += 0.02;
+                    realX2 -= 0.02;
+                }
+            }
+
+            // Wall bounce (on real position limits)
+            if (x1 <= 0 || x1 >= containerWidth - objWidth) v1 *= -1;
+            if (x2 <= 0 || x2 >= containerWidth - objWidth) v2 *= -1;
+
+            document.getElementById('realDist').textContent = Math.abs(realX1 - realX2).toFixed(2);
+            document.getElementById('hour').textContent = Time.toFixed(2);
+            document.getElementById('v1Data').textContent = (v1 * 6 * 36 / pixelsPerKm).toFixed(2);
+            document.getElementById('v2Data').textContent = (v2 * 6 * 36 / pixelsPerKm).toFixed(2);
+
+
+            //             addData.innerHTML = `
+            //     <h2>Simulation Data</h2>
+            //     <div class="flex-data">
+            //     <div>
+            //         <p><strong>Real Distance Between:</strong> ${(Math.abs(realX1 - realX2)).toFixed(2)} km</p>
+            //     <p><strong>Hour:</strong> ${Time.toFixed(2)}</p>
+            //     </div>
+            //     <div>
+            //         <p><strong>Object 1 Velocity:</strong> ${(v1 * 6 * 36 / pixelsPerKm).toFixed(2)} km/h</p>
+            //     <p><strong>Object 2 Velocity:</strong> ${(v2 * 6 * 36 / pixelsPerKm).toFixed(2)} km/h</p>
+            //         </div>
+            //         </div>
+
+
+
+            // `;
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        function resetSimulation() {
+            cancelAnimationFrame(animationId);
+            document.getElementById('data').innerText = '';
+            obj1.style.left = `0px`;
+            obj2.style.left = `800px`;
+        }
+    </script>
+
+</body>
+
+</html>
